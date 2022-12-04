@@ -1,5 +1,7 @@
-use crate::parse_utils::{parse_current, parse_getvolume, parse_queue, parse_status};
-use reqwest;
+use crate::parse_utils::{
+    get_error_code, parse_current, parse_getvolume, parse_queue, parse_status,
+};
+use reqwest::{self, StatusCode};
 use std::collections::HashMap;
 use std::str;
 // NOTE: async fns in traits was recently added to nightly build
@@ -65,13 +67,33 @@ pub trait Action {
         map
     }
 
+    fn handle_sonos_err_code(&self, _err_code: &str) -> Option<String> {
+        None
+    }
+
     async fn res_to_output(
         &self,
         res: Result<reqwest::Response, reqwest::Error>,
     ) -> Result<String, String> {
         let res = res.map_err(|err| format!("Error sending request: {err}"))?;
+        let status = res.status();
 
-        Ok(format!("Response {}", res.status()))
+        match status {
+            StatusCode::OK => Ok(format!("Response {}", status)),
+            status_code => {
+                let body = res
+                    .text()
+                    .await
+                    .map_err(|err| format!("Error getting response body: {err}"))?;
+                match get_error_code(body, &self.get_action_name(), self.get_service().get_data().name) {
+                    Ok(sonos_err_code) => {
+                        let details = self.handle_sonos_err_code(&sonos_err_code).unwrap_or(format!("Sonos error code: {sonos_err_code}"));
+                        Err(format!("Speaker responded with {status_code}\n{details}"))
+                    },
+                    Err(err) => Err(format!("Speaker responded with {status_code}:\nA more specific error code could not be found: {err}"))
+                }
+            }
+        }
     }
 }
 
@@ -186,7 +208,7 @@ impl Action for GetCurrentTrackInfo {
         let output = parse_current(xml)?;
 
         Ok(format!(
-            "Get queue request responded with {}\n{}",
+            "Get current request responded with {}\n{}",
             status, output
         ))
     }
@@ -375,6 +397,13 @@ impl Action for Next {
     fn get_action_name(&self) -> String {
         String::from("Next")
     }
+
+    fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
+        match err_code {
+            "711" => Some("Could not find next track. Ensure that you are in the queue and that there are tracks after the current one.".to_owned()),
+            _ => None,
+        }
+    }
 }
 
 pub struct Previous;
@@ -387,6 +416,13 @@ impl Action for Previous {
 
     fn get_action_name(&self) -> String {
         String::from("Previous")
+    }
+
+    fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
+        match err_code {
+            "711" => Some("Could not find previous track. Ensure that you are in the queue and that there are tracks before the current one.".to_owned()),
+            _ => None,
+        }
     }
 }
 

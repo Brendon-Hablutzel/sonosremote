@@ -6,8 +6,12 @@ fn general_clean(xml: String, action_name: &str, service_name: &str) -> String {
         format!(r#"xmlns:u="urn:schemas-upnp-org:service:{}""#, service_name);
     let new_action_tag_name = format!("{action_name}Response");
     let old_action_tag_name = format!("u:{action_name}Response");
-    xml.replace("s:Envelope", "Envelope")
-        .replace("s:Body", "Body")
+    xml
+        // .replace("s:Envelope", "Envelope")
+        // .replace("s:Body", "Body")
+        // RISKY BUT RESULTS IN MORE THOROUGH CLEANING:
+        .replace("<s:", "<")
+        .replace("</s:", "</")
         .replace(r#"xmlns:s="http://schemas.xmlsoap.org/soap/envelope/""#, "")
         .replace(
             r#"s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/""#,
@@ -38,14 +42,21 @@ fn clean_meta_data(xml: String) -> String {
             r#"xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/""#,
             "",
         )
-        .replace("upnp:albumArtURI", "albumArtURI")
-        .replace("dc:title", "title")
-        .replace("upnp:class", "class")
-        .replace("dc:creator", "creator")
-        .replace("upnp:album", "album")
-        .replace("upnp:originalTrackNumber", "originalTrackNumber")
-        .replace("r:albumArtist", "albumArtist")
-        .replace("r:streamContent", "streamContent")
+        // .replace("upnp:albumArtURI", "albumArtURI")
+        // .replace("dc:title", "title")
+        // .replace("upnp:class", "class")
+        // .replace("dc:creator", "creator")
+        // .replace("upnp:album", "album")
+        // .replace("upnp:originalTrackNumber", "originalTrackNumber")
+        // .replace("r:albumArtist", "albumArtist")
+        // .replace("r:streamContent", "streamContent")
+        // RISKY BUT RESULTS IN MORE THOROUGH CLEANING:
+        .replace("<dc:", "<")
+        .replace("<upnp:", "<")
+        .replace("<r:", "<")
+        .replace("</dc:", "</")
+        .replace("</upnp:", "</")
+        .replace("</r:", "</")
 }
 
 #[derive(Debug)]
@@ -170,7 +181,7 @@ pub fn parse_status(xml: String) -> Result<PlaybackStatus, String> {
 
 #[derive(Debug)]
 pub struct QueueItem {
-    duration: String,
+    duration: Option<String>,
     uri: String,
     title: Option<String>,
     artist: Option<String>,
@@ -178,12 +189,13 @@ pub struct QueueItem {
 
 impl fmt::Display for QueueItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let title: &str = self.title.as_ref().map_or("None", |n| n);
+        let title = self.title.as_ref().map_or("None", |n| n);
         let artist = self.artist.as_ref().map_or("None", |n| n);
+        let duration = self.duration.as_ref().map_or("None", |n| n);
         write!(
             f,
             "{} by {}\nURI: {}\nDuration: {}",
-            title, artist, self.uri, self.duration
+            title, artist, self.uri, duration
         )
     }
 }
@@ -207,10 +219,7 @@ fn parse_queue_item(item: roxmltree::Node) -> Result<QueueItem, String> {
         .map(|n| get_text(n, "Error getting title"))
         .transpose()?;
 
-    let duration = res
-        .attribute("duration")
-        .ok_or("No duration attr found")?
-        .to_owned();
+    let duration = res.attribute("duration").map(|n| n.to_owned());
 
     let uri = get_text(res, "No URI found")?;
 
@@ -233,4 +242,19 @@ pub fn parse_queue(xml: String) -> Result<Vec<QueueItem>, String> {
         .collect();
     let items = items?;
     Ok(items)
+}
+
+pub fn get_error_code(
+    xml: String,
+    action_name: &str,
+    service_name: &str,
+) -> Result<String, String> {
+    let xml = general_clean(xml, action_name, service_name);
+    let parsed =
+        roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
+    let error_code = get_text(
+        get_tag_by_name(&parsed, "errorCode")?,
+        "Could not find error code",
+    )?;
+    Ok(error_code)
 }
