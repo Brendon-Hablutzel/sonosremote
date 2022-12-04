@@ -1,0 +1,13 @@
+[package]
+name = "sonosremote"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.59"
+reqwest = {version= "0.11.13"}
+roxmltree = "0.16.0"
+tokio = {version= "1.22.0", features=["full"]}
+xml-builder = "0.5.1"
