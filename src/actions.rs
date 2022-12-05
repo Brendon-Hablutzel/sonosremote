@@ -55,6 +55,13 @@ impl Services {
     }
 }
 
+async fn get_res_text(res: reqwest::Response) -> Result<String, String> {
+    Ok(res
+        .text()
+        .await
+        .map_err(|err| format!("Error getting response body: {err}"))?)
+}
+
 #[async_trait]
 pub trait Action {
     fn get_service(&self) -> Services;
@@ -71,6 +78,10 @@ pub trait Action {
         None
     }
 
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok("Success".to_owned())
+    }
+
     async fn res_to_output(
         &self,
         res: Result<reqwest::Response, reqwest::Error>,
@@ -79,12 +90,9 @@ pub trait Action {
         let status = res.status();
 
         match status {
-            StatusCode::OK => Ok("Success".to_string()),
+            StatusCode::OK => self.handle_successful_response(res).await,
             status_code => {
-                let body = res
-                    .text()
-                    .await
-                    .map_err(|err| format!("Error getting response body: {err}"))?;
+                let body = get_res_text(res).await?;
                 match get_error_code(body, &self.get_action_name(), self.get_service().get_data().name) {
                     Ok(sonos_err_code) => {
                         let details = self.handle_sonos_err_code(&sonos_err_code).unwrap_or(format!("Sonos error code: {sonos_err_code}"));
@@ -115,6 +123,13 @@ impl Action for Play {
         map.insert("Speed", "1");
         map
     }
+
+    fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
+        match err_code {
+            "701" => Some("Action currently unavailable. Ensure there is a track selected and that it is not currently playing.".to_owned()),
+            _ => None
+        }
+    }
 }
 
 pub struct Pause;
@@ -127,6 +142,13 @@ impl Action for Pause {
 
     fn get_action_name(&self) -> String {
         String::from("Pause")
+    }
+
+    fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
+        match err_code {
+            "701" => Some("Action currently unavailable. Ensure there is a track selected and that it is curretly playing.".to_owned()),
+            _ => None
+        }
     }
 }
 
@@ -153,23 +175,9 @@ impl Action for GetQueue {
         map
     }
 
-    async fn res_to_output(
-        &self,
-        res: Result<reqwest::Response, reqwest::Error>,
-    ) -> Result<String, String> {
-        let res = res.map_err(|err| format!("Error sending request: {err}"))?;
+    async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
+        let xml = get_res_text(res).await?;
 
-        let status = res.status();
-
-        if status != StatusCode::OK {
-            return Err(format!("Error fetching queue {}", status));
-        }
-
-        let xml = res
-            .text()
-            .await
-            .map_err(|err| format!("Error getting response body: {err}"))?;
-        
         let mut output = String::new();
         output.push_str("Queue:");
 
@@ -202,21 +210,9 @@ impl Action for GetCurrentTrackInfo {
         String::from("GetPositionInfo")
     }
 
-    async fn res_to_output(
-        &self,
-        res: Result<reqwest::Response, reqwest::Error>,
-    ) -> Result<String, String> {
-        let res = res.map_err(|err| format!("Error sending request: {err}"))?;
+    async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
+        let xml = get_res_text(res).await?;
 
-        let status = res.status();
-        if status != StatusCode::OK {
-            return Err(format!("Error getting current track: {status}"));
-        }
-
-        let xml = res
-            .text()
-            .await
-            .map_err(|err| format!("Error getting response body: {err}"))?;
         let output = parse_current(xml)?;
 
         Ok(format!("Current track:\n{output}"))
@@ -309,21 +305,8 @@ impl Action for GetVolume {
         map
     }
 
-    async fn res_to_output(
-        &self,
-        res: Result<reqwest::Response, reqwest::Error>,
-    ) -> Result<String, String> {
-        let res = res.map_err(|err| format!("Error sending request: {err}"))?;
-
-        let status = res.status();
-        if status != StatusCode::OK {
-            return Err(format!("Error setting volume: {status}"));
-        }
-
-        let xml = res
-            .text()
-            .await
-            .map_err(|err| format!("Error getting response body: {err}"))?;
+    async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
+        let xml = get_res_text(res).await?;
 
         let volume = parse_getvolume(xml)?;
 
@@ -343,21 +326,8 @@ impl Action for GetStatus {
         String::from("GetTransportInfo")
     }
 
-    async fn res_to_output(
-        &self,
-        res: Result<reqwest::Response, reqwest::Error>,
-    ) -> Result<String, String> {
-        let res = res.map_err(|err| format!("Error sending request: {err}"))?;
-
-        let status = res.status();
-        if status != StatusCode::OK {
-            return Err(format!("Error getting status: {status}"));
-        }
-
-        let xml = res
-            .text()
-            .await
-            .map_err(|err| format!("Error getting response body: {err}"))?;
+    async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
+        let xml = get_res_text(res).await?;
 
         let data = parse_status(xml)?;
 
@@ -411,7 +381,7 @@ impl Action for Next {
 
     fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
         match err_code {
-            "711" => Some("Could not find next track. Ensure that you are in the queue and that there are tracks after the current one.".to_owned()),
+            "701" => Some("Could not find next track. Ensure that you are in the queue and that there are tracks after the current one.".to_owned()),
             _ => None,
         }
     }
@@ -431,7 +401,7 @@ impl Action for Previous {
 
     fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
         match err_code {
-            "711" => Some("Could not find previous track. Ensure that you are in the queue and that there are tracks before the current one.".to_owned()),
+            "701" => Some("Could not find previous track. Ensure that you are in the queue and that there are tracks before the current one.".to_owned()),
             _ => None,
         }
     }

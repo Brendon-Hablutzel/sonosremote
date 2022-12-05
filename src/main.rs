@@ -1,5 +1,5 @@
-use std::{env, process};
 use crate::speaker::action_then_current;
+use std::{env, process};
 mod actions;
 mod parse_utils;
 mod speaker;

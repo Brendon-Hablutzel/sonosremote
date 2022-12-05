@@ -17,12 +17,14 @@ pub async fn enter_queue(s: &Speaker) -> Result<String, String> {
     s.cmd(actions::SetURI::new(uri)).await
 }
 
-pub async fn action_then_current(s: &Speaker, action: impl Action + std::marker::Sync) -> Result<String, String> {
+pub async fn action_then_current(
+    s: &Speaker,
+    action: impl Action + std::marker::Sync,
+) -> Result<String, String> {
     let _action_res = s.cmd(action).await?;
     let current_track_info = s.cmd(actions::GetCurrentTrackInfo).await?;
     Ok(current_track_info)
 }
-
 
 pub struct Speaker {
     ip_addr: Ipv4Addr,
@@ -83,9 +85,8 @@ impl Speaker {
 
         let url = build_sonos_url(self.ip_addr, &service_endpoint);
 
-        // find some other way to display XMLError
-        let xml_bytes = generate_xml(&action_name, &service_name, arguments)
-            .map_err(|err| format!("Error generating xml request: {:?}", err))?;
+        let xml_bytes =
+            generate_xml(&action_name, &service_name, arguments).map_err(parse_xml_builder_err)?;
 
         let res = self
             .client
@@ -107,6 +108,13 @@ impl Speaker {
 
     pub fn get_info(&self) -> String {
         format!("UID: {}", self.uid)
+    }
+}
+
+fn parse_xml_builder_err(err: XMLError) -> String {
+    match err {
+        XMLError::IOError(s) => s,
+        XMLError::InsertError(s) => s,
     }
 }
 
