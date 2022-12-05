@@ -1,4 +1,5 @@
 use std::{env, process};
+use crate::speaker::action_then_current;
 mod actions;
 mod parse_utils;
 mod speaker;
@@ -57,8 +58,8 @@ async fn main() {
                         .await
                 }
             },
-            "next" => speaker.cmd(actions::Next).await,
-            "previous" => speaker.cmd(actions::Previous).await,
+            "next" => action_then_current(&speaker, actions::Next).await,
+            "previous" => action_then_current(&speaker, actions::Previous).await,
             "endcontrol" => speaker.cmd(actions::EndDirectControlSession).await,
             "enterqueue" => speaker::enter_queue(&speaker).await,
             "info" => Ok(speaker.get_info()),

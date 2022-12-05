@@ -79,7 +79,7 @@ pub trait Action {
         let status = res.status();
 
         match status {
-            StatusCode::OK => Ok(format!("Response {}", status)),
+            StatusCode::OK => Ok("Success".to_string()),
             status_code => {
                 let body = res
                     .text()
@@ -160,14 +160,25 @@ impl Action for GetQueue {
         let res = res.map_err(|err| format!("Error sending request: {err}"))?;
 
         let status = res.status();
+
+        if status != StatusCode::OK {
+            return Err(format!("Error fetching queue {}", status));
+        }
+
         let xml = res
             .text()
             .await
             .map_err(|err| format!("Error getting response body: {err}"))?;
+        
         let mut output = String::new();
         output.push_str("Queue:");
 
         let queue_items = parse_queue(xml)?;
+
+        if queue_items.len() == 0 {
+            return Ok("No tracks found in queue".to_owned());
+        }
+
         let mut index = 1;
 
         for item in queue_items {
@@ -175,10 +186,7 @@ impl Action for GetQueue {
             index += 1;
         }
 
-        Ok(format!(
-            "Get queue request responded with {}\n{}",
-            status, output
-        ))
+        Ok(output)
     }
 }
 
@@ -201,16 +209,17 @@ impl Action for GetCurrentTrackInfo {
         let res = res.map_err(|err| format!("Error sending request: {err}"))?;
 
         let status = res.status();
+        if status != StatusCode::OK {
+            return Err(format!("Error getting current track: {status}"));
+        }
+
         let xml = res
             .text()
             .await
             .map_err(|err| format!("Error getting response body: {err}"))?;
         let output = parse_current(xml)?;
 
-        Ok(format!(
-            "Get current request responded with {}\n{}",
-            status, output
-        ))
+        Ok(format!("Current track:\n{output}"))
     }
 }
 
@@ -307,6 +316,10 @@ impl Action for GetVolume {
         let res = res.map_err(|err| format!("Error sending request: {err}"))?;
 
         let status = res.status();
+        if status != StatusCode::OK {
+            return Err(format!("Error setting volume: {status}"));
+        }
+
         let xml = res
             .text()
             .await
@@ -314,10 +327,7 @@ impl Action for GetVolume {
 
         let volume = parse_getvolume(xml)?;
 
-        Ok(format!(
-            "Get volume request responded with {}\nVolume: {}",
-            status, volume
-        ))
+        Ok(format!("Current volume: {volume}"))
     }
 }
 
@@ -340,6 +350,10 @@ impl Action for GetStatus {
         let res = res.map_err(|err| format!("Error sending request: {err}"))?;
 
         let status = res.status();
+        if status != StatusCode::OK {
+            return Err(format!("Error getting status: {status}"));
+        }
+
         let xml = res
             .text()
             .await
@@ -347,10 +361,7 @@ impl Action for GetStatus {
 
         let data = parse_status(xml)?;
 
-        Ok(format!(
-            "Get status request responded with {}\n{}",
-            status, data
-        ))
+        Ok(format!("Current status:\n{data}"))
     }
 }
 

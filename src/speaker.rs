@@ -1,4 +1,4 @@
-use crate::actions;
+use crate::actions::{self, Action};
 use reqwest;
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
@@ -16,6 +16,13 @@ pub async fn enter_queue(s: &Speaker) -> Result<String, String> {
     let uri = format!("x-rincon-queue:{}#0", &s.uid);
     s.cmd(actions::SetURI::new(uri)).await
 }
+
+pub async fn action_then_current(s: &Speaker, action: impl Action + std::marker::Sync) -> Result<String, String> {
+    let _action_res = s.cmd(action).await?;
+    let current_track_info = s.cmd(actions::GetCurrentTrackInfo).await?;
+    Ok(current_track_info)
+}
+
 
 pub struct Speaker {
     ip_addr: Ipv4Addr,
