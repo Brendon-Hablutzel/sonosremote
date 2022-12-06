@@ -66,7 +66,7 @@ async fn get_res_text(res: reqwest::Response) -> Result<String, String> {
 pub trait Action {
     fn get_service(&self) -> Services;
 
-    fn get_action_name(&self) -> String;
+    fn get_action_name(&self) -> &'static str;
 
     fn get_args_map(&self) -> HashMap<&str, &str> {
         let mut map = HashMap::new();
@@ -113,8 +113,8 @@ impl Action for Play {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("Play")
+    fn get_action_name(&self) -> &'static str {
+        "Play"
     }
 
     fn get_args_map(&self) -> HashMap<&str, &str> {
@@ -140,8 +140,8 @@ impl Action for Pause {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("Pause")
+    fn get_action_name(&self) -> &'static str {
+        "Pause"
     }
 
     fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
@@ -160,8 +160,8 @@ impl Action for GetQueue {
         Services::ContentDirectory
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("Browse")
+    fn get_action_name(&self) -> &'static str {
+        "Browse"
     }
 
     fn get_args_map(&self) -> HashMap<&str, &str> {
@@ -206,8 +206,8 @@ impl Action for GetCurrentTrackInfo {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("GetPositionInfo")
+    fn get_action_name(&self) -> &'static str {
+        "GetPositionInfo"
     }
 
     async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
@@ -235,8 +235,8 @@ impl Action for SetURI {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("SetAVTransportURI")
+    fn get_action_name(&self) -> &'static str {
+        "SetAVTransportURI"
     }
 
     fn get_args_map(&self) -> HashMap<&str, &str> {
@@ -273,8 +273,8 @@ impl Action for SetVolume {
         Services::RenderingControl
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("SetVolume")
+    fn get_action_name(&self) -> &'static str {
+        "SetVolume"
     }
 
     fn get_args_map(&self) -> HashMap<&str, &str> {
@@ -294,8 +294,8 @@ impl Action for GetVolume {
         Services::RenderingControl
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("GetVolume")
+    fn get_action_name(&self) -> &'static str {
+        "GetVolume"
     }
 
     fn get_args_map(&self) -> HashMap<&str, &str> {
@@ -322,8 +322,8 @@ impl Action for GetStatus {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("GetTransportInfo")
+    fn get_action_name(&self) -> &'static str {
+        "GetTransportInfo"
     }
 
     async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
@@ -354,8 +354,8 @@ impl Action for Seek {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("Seek")
+    fn get_action_name(&self) -> &'static str {
+        "Seek"
     }
 
     fn get_args_map(&self) -> HashMap<&str, &str> {
@@ -375,8 +375,8 @@ impl Action for Next {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("Next")
+    fn get_action_name(&self) -> &'static str {
+        "Next"
     }
 
     fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
@@ -395,8 +395,8 @@ impl Action for Previous {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("Previous")
+    fn get_action_name(&self) -> &'static str {
+        "Previous"
     }
 
     fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
@@ -415,8 +415,8 @@ impl Action for EndDirectControlSession {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("EndDirectControlSession")
+    fn get_action_name(&self) -> &'static str {
+        "EndDirectControlSession"
     }
 }
 
@@ -436,8 +436,8 @@ impl Action for AddURIToQueue {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("AddURIToQueue")
+    fn get_action_name(&self) -> &'static str {
+        "AddURIToQueue"
     }
 
     fn get_args_map(&self) -> HashMap<&str, &str> {
@@ -459,7 +459,7 @@ impl Action for ClearQueue {
         Services::AVTransport
     }
 
-    fn get_action_name(&self) -> String {
-        String::from("RemoveAllTracksFromQueue")
+    fn get_action_name(&self) -> &'static str {
+        "RemoveAllTracksFromQueue"
     }
 }

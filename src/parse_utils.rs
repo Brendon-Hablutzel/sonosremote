@@ -201,7 +201,6 @@ impl fmt::Display for QueueItem {
 }
 
 fn parse_queue_item(item: roxmltree::Node) -> Result<QueueItem, String> {
-    // FIX ALL THIS--too verbose and repetitive
     let res = item
         .descendants()
         .find(|n| n.has_tag_name("res"))
