@@ -1,7 +1,7 @@
 use roxmltree;
 use std::fmt;
 
-use crate::actions::Action;
+use crate::actions::{Action, GetCurrentTrackInfo, GetQueue, GetStatus, GetVolume};
 
 fn general_clean<T>(xml: String, action: &T) -> String
 where
@@ -103,8 +103,7 @@ fn get_text<'a>(tag: roxmltree::Node, err: &'a str) -> Result<String, &'a str> {
     Ok(tag.text().ok_or(err)?.to_owned())
 }
 
-pub fn parse_current(xml: String, action: &impl Action) -> Result<CurrentData, String> {
-    // let xml = clean_meta_data(general_clean(xml, "GetPositionInfo", "AVTransport:1"));
+pub fn parse_current(xml: String, action: &GetCurrentTrackInfo) -> Result<CurrentData, String> {
     let xml = clean_meta_data(general_clean(xml, action));
     let parsed_xml =
         roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
@@ -145,7 +144,7 @@ pub fn parse_current(xml: String, action: &impl Action) -> Result<CurrentData, S
     })
 }
 
-pub fn parse_getvolume(xml: String, action: &impl Action) -> Result<String, String> {
+pub fn parse_getvolume(xml: String, action: &GetVolume) -> Result<String, String> {
     let xml = general_clean(xml, action);
     let parsed_xml =
         roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
@@ -170,9 +169,8 @@ impl fmt::Display for PlaybackStatus {
     }
 }
 
-pub fn parse_status(xml: String, action: &impl Action) -> Result<PlaybackStatus, String> {
+pub fn parse_status(xml: String, action: &GetStatus) -> Result<PlaybackStatus, String> {
     let xml = general_clean(xml, action);
-    // let xml = general_clean(xml, "GetTransportInfo", "AVTransport:1");
     let parsed_xml =
         roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
 
@@ -240,7 +238,7 @@ fn parse_queue_item(item: roxmltree::Node) -> Result<QueueItem, String> {
     })
 }
 
-pub fn parse_queue(xml: String, action: &impl Action) -> Result<Vec<QueueItem>, String> {
+pub fn parse_queue(xml: String, action: &GetQueue) -> Result<Vec<QueueItem>, String> {
     let xml = clean_meta_data(general_clean(xml, action));
 
     let parsed =
@@ -255,7 +253,7 @@ pub fn parse_queue(xml: String, action: &impl Action) -> Result<Vec<QueueItem>, 
     Ok(items)
 }
 
-// ?Sized is required because size of Self is not known at compile time (or something)
+// ?Sized is required because size of 'action' is not known at compile time
 pub fn get_error_code<T>(xml: String, action: &T) -> Result<String, String>
 where
     T: Action + ?Sized,
