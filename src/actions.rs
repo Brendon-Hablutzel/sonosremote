@@ -93,7 +93,7 @@ pub trait Action {
             StatusCode::OK => self.handle_successful_response(res).await,
             status_code => {
                 let body = get_res_text(res).await?;
-                match get_error_code(body, &self.get_action_name(), self.get_service().get_data().name) {
+                match get_error_code(body, self) {
                     Ok(sonos_err_code) => {
                         let details = self.handle_sonos_err_code(&sonos_err_code).unwrap_or(format!("Sonos error code: {sonos_err_code}"));
                         Err(format!("Speaker responded with {status_code}\n{details}"))
@@ -181,7 +181,7 @@ impl Action for GetQueue {
         let mut output = String::new();
         output.push_str("Queue:");
 
-        let queue_items = parse_queue(xml)?;
+        let queue_items = parse_queue(xml, self)?;
 
         if queue_items.len() == 0 {
             return Ok("No tracks found in queue".to_owned());
@@ -213,7 +213,7 @@ impl Action for GetCurrentTrackInfo {
     async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
         let xml = get_res_text(res).await?;
 
-        let output = parse_current(xml)?;
+        let output = parse_current(xml, self)?;
 
         Ok(format!("Current track:\n{output}"))
     }
@@ -308,7 +308,7 @@ impl Action for GetVolume {
     async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
         let xml = get_res_text(res).await?;
 
-        let volume = parse_getvolume(xml)?;
+        let volume = parse_getvolume(xml, self)?;
 
         Ok(format!("Current volume: {volume}"))
     }
@@ -329,7 +329,7 @@ impl Action for GetStatus {
     async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
         let xml = get_res_text(res).await?;
 
-        let data = parse_status(xml)?;
+        let data = parse_status(xml, self)?;
 
         Ok(format!("Current status:\n{data}"))
     }

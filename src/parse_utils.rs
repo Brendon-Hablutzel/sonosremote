@@ -1,7 +1,15 @@
 use roxmltree;
 use std::fmt;
 
-fn general_clean(xml: String, action_name: &str, service_name: &str) -> String {
+use crate::actions::Action;
+
+fn general_clean<T>(xml: String, action: &T) -> String
+where
+    T: Action + ?Sized,
+{
+    let action_name = action.get_action_name();
+    let service_name = action.get_service().get_data().get_name();
+
     let response_service_url =
         format!(r#"xmlns:u="urn:schemas-upnp-org:service:{}""#, service_name);
     let new_action_tag_name = format!("{action_name}Response");
@@ -95,8 +103,9 @@ fn get_text<'a>(tag: roxmltree::Node, err: &'a str) -> Result<String, &'a str> {
     Ok(tag.text().ok_or(err)?.to_owned())
 }
 
-pub fn parse_current(xml: String) -> Result<CurrentData, String> {
-    let xml = clean_meta_data(general_clean(xml, "GetPositionInfo", "AVTransport:1"));
+pub fn parse_current(xml: String, action: &impl Action) -> Result<CurrentData, String> {
+    // let xml = clean_meta_data(general_clean(xml, "GetPositionInfo", "AVTransport:1"));
+    let xml = clean_meta_data(general_clean(xml, action));
     let parsed_xml =
         roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
 
@@ -136,8 +145,8 @@ pub fn parse_current(xml: String) -> Result<CurrentData, String> {
     })
 }
 
-pub fn parse_getvolume(xml: String) -> Result<String, String> {
-    let xml = general_clean(xml, "GetVolume", "RenderingControl:1");
+pub fn parse_getvolume(xml: String, action: &impl Action) -> Result<String, String> {
+    let xml = general_clean(xml, action);
     let parsed_xml =
         roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
 
@@ -161,8 +170,9 @@ impl fmt::Display for PlaybackStatus {
     }
 }
 
-pub fn parse_status(xml: String) -> Result<PlaybackStatus, String> {
-    let xml = general_clean(xml, "GetTransportInfo", "AVTransport:1");
+pub fn parse_status(xml: String, action: &impl Action) -> Result<PlaybackStatus, String> {
+    let xml = general_clean(xml, action);
+    // let xml = general_clean(xml, "GetTransportInfo", "AVTransport:1");
     let parsed_xml =
         roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
 
@@ -204,7 +214,7 @@ fn parse_queue_item(item: roxmltree::Node) -> Result<QueueItem, String> {
     let res = item
         .descendants()
         .find(|n| n.has_tag_name("res"))
-        .ok_or("res tag not found")?;
+        .ok_or("'res' tag not found")?;
 
     let title = item
         .descendants()
@@ -215,7 +225,7 @@ fn parse_queue_item(item: roxmltree::Node) -> Result<QueueItem, String> {
     let artist = item
         .descendants()
         .find(|n| n.has_tag_name("albumArtist"))
-        .map(|n| get_text(n, "Error getting title"))
+        .map(|n| get_text(n, "Error getting artist"))
         .transpose()?;
 
     let duration = res.attribute("duration").map(|n| n.to_owned());
@@ -230,10 +240,12 @@ fn parse_queue_item(item: roxmltree::Node) -> Result<QueueItem, String> {
     })
 }
 
-pub fn parse_queue(xml: String) -> Result<Vec<QueueItem>, String> {
-    let xml = clean_meta_data(general_clean(xml, "Browse", "ContentDirectory:1"));
+pub fn parse_queue(xml: String, action: &impl Action) -> Result<Vec<QueueItem>, String> {
+    let xml = clean_meta_data(general_clean(xml, action));
+
     let parsed =
         roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
+
     let items: Result<Vec<QueueItem>, String> = parsed
         .descendants()
         .filter(|n| n.has_tag_name("item"))
@@ -243,12 +255,12 @@ pub fn parse_queue(xml: String) -> Result<Vec<QueueItem>, String> {
     Ok(items)
 }
 
-pub fn get_error_code(
-    xml: String,
-    action_name: &str,
-    service_name: &str,
-) -> Result<String, String> {
-    let xml = general_clean(xml, action_name, service_name);
+// ?Sized is required because size of Self is not known at compile time (or something)
+pub fn get_error_code<T>(xml: String, action: &T) -> Result<String, String>
+where
+    T: Action + ?Sized,
+{
+    let xml = general_clean(xml, action);
     let parsed =
         roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
     let error_code = get_text(
