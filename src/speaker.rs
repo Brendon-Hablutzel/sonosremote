@@ -79,7 +79,7 @@ impl Speaker {
         let action_name = action.get_action_name();
         let arguments = action.get_args_map();
 
-        let service = action.get_service().get_data();
+        let service = action.get_service();
         let service_endpoint = service.get_endpoint();
         let service_name = service.get_name();
 

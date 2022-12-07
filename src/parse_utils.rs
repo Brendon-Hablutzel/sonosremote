@@ -8,7 +8,7 @@ where
     T: Action + ?Sized,
 {
     let action_name = action.get_action_name();
-    let service_name = action.get_service().get_data().get_name();
+    let service_name = action.get_service().get_name();
 
     let response_service_url =
         format!(r#"xmlns:u="urn:schemas-upnp-org:service:{}""#, service_name);

@@ -1,59 +1,12 @@
 use crate::parse_utils::{
     get_error_code, parse_current, parse_getvolume, parse_queue, parse_status,
 };
+use crate::services::{AVTransport, ContentDirectory, RenderingControl, Service};
 use reqwest::{self, StatusCode};
 use std::collections::HashMap;
 use std::str;
 // NOTE: async fns in traits was recently added to nightly build
 use async_trait::async_trait;
-
-const CONTENT_DIRECTORY_ENDPOINT: &str = "/MediaServer/ContentDirectory/Control";
-
-const CONTENT_DIRECTORY_SERVICE_NAME: &str = "ContentDirectory:1";
-
-const TRANSPORT_ENDPOINT: &str = "/MediaRenderer/AVTransport/Control";
-
-const TRANSPORT_SERVICE_NAME: &str = "AVTransport:1";
-
-const RENDERING_CONTROL_ENDPOINT: &str = "/MediaRenderer/RenderingControl/Control";
-
-const RENDERING_CONTROL_SERVICE_NAME: &str = "RenderingControl:1";
-
-pub struct Service {
-    name: &'static str,
-    endpoint: &'static str,
-}
-
-impl Service {
-    pub fn get_name(&self) -> &'static str {
-        self.name
-    }
-
-    pub fn get_endpoint(&self) -> &'static str {
-        self.endpoint
-    }
-}
-
-pub enum Services {
-    AVTransport,
-    ContentDirectory,
-    RenderingControl,
-}
-
-impl Services {
-    pub fn get_data(&self) -> Service {
-        let (name, endpoint) = match self {
-            Services::AVTransport => (TRANSPORT_SERVICE_NAME, TRANSPORT_ENDPOINT),
-            Services::ContentDirectory => {
-                (CONTENT_DIRECTORY_SERVICE_NAME, CONTENT_DIRECTORY_ENDPOINT)
-            }
-            Services::RenderingControl => {
-                (RENDERING_CONTROL_SERVICE_NAME, RENDERING_CONTROL_ENDPOINT)
-            }
-        };
-        Service { name, endpoint }
-    }
-}
 
 async fn get_res_text(res: reqwest::Response) -> Result<String, String> {
     Ok(res
@@ -64,7 +17,7 @@ async fn get_res_text(res: reqwest::Response) -> Result<String, String> {
 
 #[async_trait]
 pub trait Action {
-    fn get_service(&self) -> Services;
+    fn get_service(&self) -> Box<dyn Service>;
 
     fn get_action_name(&self) -> &'static str;
 
@@ -109,8 +62,8 @@ pub struct Play;
 
 #[async_trait]
 impl Action for Play {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -136,8 +89,8 @@ pub struct Pause;
 
 #[async_trait]
 impl Action for Pause {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -146,7 +99,7 @@ impl Action for Pause {
 
     fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
         match err_code {
-            "701" => Some("Action currently unavailable. Ensure there is a track selected and that it is curretly playing.".to_owned()),
+            "701" => Some("Action currently unavailable. Ensure there is a track selected and that it is currently playing.".to_owned()),
             _ => None
         }
     }
@@ -156,8 +109,8 @@ pub struct GetQueue;
 
 #[async_trait]
 impl Action for GetQueue {
-    fn get_service(&self) -> Services {
-        Services::ContentDirectory
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(ContentDirectory)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -202,8 +155,8 @@ pub struct GetCurrentTrackInfo;
 
 #[async_trait]
 impl Action for GetCurrentTrackInfo {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -231,8 +184,8 @@ impl SetURI {
 
 #[async_trait]
 impl Action for SetURI {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -269,8 +222,8 @@ impl SetVolume {
 
 #[async_trait]
 impl Action for SetVolume {
-    fn get_service(&self) -> Services {
-        Services::RenderingControl
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(RenderingControl)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -290,8 +243,8 @@ pub struct GetVolume;
 
 #[async_trait]
 impl Action for GetVolume {
-    fn get_service(&self) -> Services {
-        Services::RenderingControl
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(RenderingControl)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -318,8 +271,8 @@ pub struct GetStatus;
 
 #[async_trait]
 impl Action for GetStatus {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -350,8 +303,8 @@ impl Seek {
 
 #[async_trait]
 impl Action for Seek {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -371,8 +324,8 @@ pub struct Next;
 
 #[async_trait]
 impl Action for Next {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -381,7 +334,7 @@ impl Action for Next {
 
     fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
         match err_code {
-            "701" => Some("Could not find next track. Ensure that you are in the queue and that there are tracks after the current one.".to_owned()),
+            "711" => Some("Could not find next track. Ensure that you are in the queue and that there are tracks after the current one.".to_owned()),
             _ => None,
         }
     }
@@ -391,8 +344,8 @@ pub struct Previous;
 
 #[async_trait]
 impl Action for Previous {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -401,7 +354,7 @@ impl Action for Previous {
 
     fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
         match err_code {
-            "701" => Some("Could not find previous track. Ensure that you are in the queue and that there are tracks before the current one.".to_owned()),
+            "711" => Some("Could not find previous track. Ensure that you are in the queue and that there are tracks before the current one.".to_owned()),
             _ => None,
         }
     }
@@ -411,8 +364,8 @@ pub struct EndDirectControlSession;
 
 #[async_trait]
 impl Action for EndDirectControlSession {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -432,8 +385,8 @@ impl AddURIToQueue {
 
 #[async_trait]
 impl Action for AddURIToQueue {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
@@ -455,8 +408,8 @@ pub struct ClearQueue;
 
 #[async_trait]
 impl Action for ClearQueue {
-    fn get_service(&self) -> Services {
-        Services::AVTransport
+    fn get_service(&self) -> Box<dyn Service> {
+        Box::new(AVTransport)
     }
 
     fn get_action_name(&self) -> &'static str {
