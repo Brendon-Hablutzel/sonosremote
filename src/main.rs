@@ -1,24 +1,18 @@
 use crate::speaker::action_then_current;
-use std::{env, process};
+use std::env;
 mod actions;
 mod parse_utils;
 mod services;
 mod speaker;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), String> {
     let mut args = env::args();
     args.next(); // skip first argument
 
-    let ip = args.next().unwrap_or_else(|| {
-        eprintln!("Must provide an IP address");
-        process::exit(1);
-    });
+    let ip = args.next().ok_or("Must provide an IP address")?;
 
-    let speaker = speaker::Speaker::new(&ip).await.unwrap_or_else(|err| {
-        eprintln!("Error creating speaker: {}", err);
-        process::exit(1);
-    });
+    let speaker = speaker::Speaker::new(&ip).await.map_err(|err| format!("Error initializing speaker: {err}"))?;
 
     loop {
         println!(">");
