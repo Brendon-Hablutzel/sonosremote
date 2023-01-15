@@ -1,9 +1,8 @@
-use crate::speaker::action_then_current;
+use sonosremote::{
+    actions,
+    speaker::{self, action_then_current},
+};
 use std::env;
-mod actions;
-mod parse_utils;
-mod services;
-mod speaker;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -12,7 +11,9 @@ async fn main() -> Result<(), String> {
 
     let ip = args.next().ok_or("Must provide an IP address")?;
 
-    let speaker = speaker::Speaker::new(&ip).await.map_err(|err| format!("Error initializing speaker: {err}"))?;
+    let speaker = speaker::Speaker::new(&ip)
+        .await
+        .map_err(|err| format!("Error initializing speaker: {err}"))?;
 
     loop {
         println!(">");
@@ -31,20 +32,32 @@ async fn main() -> Result<(), String> {
             "play" => speaker.cmd(actions::Play).await,
             "pause" => speaker.cmd(actions::Pause).await,
             "queue" => speaker.cmd(actions::GetQueue).await,
-            "current" => speaker.cmd(actions::GetCurrentTrackInfo).await,
+            "current" => speaker
+                .cmd(actions::GetCurrentTrackInfo)
+                .await
+                .map(|track_data| format!("{track_data}")),
             "seturi" => match input.get(1) {
                 None => Err("Must enter a URI".to_owned()),
                 Some(uri) => speaker.cmd(actions::SetURI::new(uri.to_string())).await,
             },
             "setvolume" => match input.get(1) {
-                None => Err("Invalid volume".to_owned()),
-                Some(volume) => match actions::SetVolume::new(volume.to_string()) {
-                    Ok(action) => speaker.cmd(action).await,
+                None => Err("Must provide volume".to_owned()),
+                Some(str_volume) => match str_volume.parse::<u8>() {
+                    Ok(volume) => match actions::SetVolume::new(volume) {
+                        Ok(action) => speaker.cmd(action).await,
+                        Err(_) => Err("Invalid volume".to_owned()),
+                    },
                     Err(_) => Err("Invalid volume".to_owned()),
                 },
             },
-            "getvolume" => speaker.cmd(actions::GetVolume).await,
-            "status" => speaker.cmd(actions::GetStatus).await,
+            "getvolume" => speaker
+                .cmd(actions::GetVolume)
+                .await
+                .map(|vol| format!("Current volume: {vol}")),
+            "status" => speaker
+                .cmd(actions::GetStatus)
+                .await
+                .map(|status| format!("{status}")),
             "seek" => match input.get(1) {
                 None => Err("Must enter a target time".to_owned()),
                 Some(target_time) => {
@@ -53,8 +66,12 @@ async fn main() -> Result<(), String> {
                         .await
                 }
             },
-            "next" => action_then_current(&speaker, actions::Next).await,
-            "previous" => action_then_current(&speaker, actions::Previous).await,
+            "next" => action_then_current(&speaker, actions::Next)
+                .await
+                .map(|track_data| format!("{track_data}")),
+            "previous" => action_then_current(&speaker, actions::Previous)
+                .await
+                .map(|track_data| format!("{track_data}")),
             "endcontrol" => speaker.cmd(actions::EndDirectControlSession).await,
             "enterqueue" => speaker::enter_queue(&speaker).await,
             "info" => Ok(speaker.get_info()),
