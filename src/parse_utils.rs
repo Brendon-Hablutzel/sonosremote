@@ -88,7 +88,7 @@ impl fmt::Display for CurrentTrackData {
     }
 }
 
-fn get_tag_by_name<'a>(
+pub fn get_tag_by_name<'a>(
     parsed_xml: &'a roxmltree::Document,
     tag_name: &str,
 ) -> Result<roxmltree::Node<'a, 'a>, String> {
@@ -99,7 +99,7 @@ fn get_tag_by_name<'a>(
     Ok(tag)
 }
 
-fn get_text<'a>(tag: roxmltree::Node, err: &'a str) -> Result<String, &'a str> {
+pub fn get_text<'a>(tag: roxmltree::Node, err: &'a str) -> Result<String, &'a str> {
     Ok(tag.text().ok_or(err)?.to_owned())
 }
 
