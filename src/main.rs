@@ -12,7 +12,9 @@ async fn main() -> Result<(), String> {
 
     let ip = args.next().ok_or("Must provide an IP address")?;
 
-    let speaker = speaker::Speaker::new(&ip).await.map_err(|err| format!("Error initializing speaker: {err}"))?;
+    let speaker = speaker::Speaker::new(&ip)
+        .await
+        .map_err(|err| format!("Error initializing speaker: {err}"))?;
 
     loop {
         println!(">");
