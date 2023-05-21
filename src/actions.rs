@@ -1,5 +1,6 @@
 use crate::parse_utils::{
-    get_error_code, parse_current, parse_getvolume, parse_queue, parse_status,
+    get_error_code, parse_current, parse_getvolume, parse_queue, parse_status, CurrentTrackData,
+    PlaybackStatus,
 };
 use crate::services::{AVTransport, ContentDirectory, RenderingControl, Service};
 use reqwest::{self, StatusCode};
@@ -16,7 +17,7 @@ async fn get_res_text(res: reqwest::Response) -> Result<String, String> {
 }
 
 #[async_trait]
-pub trait Action {
+pub trait Action<T: std::fmt::Display = String> {
     fn get_service(&self) -> Box<dyn Service>;
 
     fn get_action_name(&self) -> &'static str;
@@ -31,14 +32,12 @@ pub trait Action {
         None
     }
 
-    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
-        Ok("Success".to_owned())
-    }
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<T, String>;
 
     async fn res_to_output(
         &self,
         res: Result<reqwest::Response, reqwest::Error>,
-    ) -> Result<String, String> {
+    ) -> Result<T, String> {
         let res = res.map_err(|err| format!("Error sending request: {err}"))?;
         let status = res.status();
 
@@ -70,6 +69,10 @@ impl Action for Play {
         "Play"
     }
 
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok("Started playback".to_owned())
+    }
+
     fn get_args_map(&self) -> HashMap<&str, &str> {
         let mut map = HashMap::new();
         map.insert("InstanceID", "0");
@@ -95,6 +98,10 @@ impl Action for Pause {
 
     fn get_action_name(&self) -> &'static str {
         "Pause"
+    }
+
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok("Stopped playback".to_owned())
     }
 
     fn handle_sonos_err_code(&self, err_code: &str) -> Option<String> {
@@ -154,7 +161,7 @@ impl Action for GetQueue {
 pub struct GetCurrentTrackInfo;
 
 #[async_trait]
-impl Action for GetCurrentTrackInfo {
+impl Action<CurrentTrackData> for GetCurrentTrackInfo {
     fn get_service(&self) -> Box<dyn Service> {
         Box::new(AVTransport)
     }
@@ -163,12 +170,13 @@ impl Action for GetCurrentTrackInfo {
         "GetPositionInfo"
     }
 
-    async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
+    async fn handle_successful_response(
+        &self,
+        res: reqwest::Response,
+    ) -> Result<CurrentTrackData, String> {
         let xml = get_res_text(res).await?;
 
-        let output = parse_current(xml, self)?;
-
-        Ok(format!("Current track:\n{output}"))
+        Ok(parse_current(xml, self)?)
     }
 }
 
@@ -199,6 +207,10 @@ impl Action for SetURI {
         map.insert("CurrentURIMetaData", "");
         map
     }
+
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok(format!("Set URI to {}", self.uri))
+    }
 }
 
 pub struct SetVolume {
@@ -206,16 +218,12 @@ pub struct SetVolume {
 }
 
 impl SetVolume {
-    pub fn new(new_volume: String) -> Result<Self, String> {
-        // could perhaps refactor this to use a match expression
-        let parsed_volume: u8 = new_volume
-            .parse()
-            .map_err(|_| "Error parsing volume".to_owned())?;
-        if parsed_volume > 100 {
+    pub fn new(desired_volume: u8) -> Result<Self, String> {
+        if desired_volume > 100 {
             return Err("Volume out of range".to_owned());
         };
         Ok(SetVolume {
-            desired_volume: new_volume,
+            desired_volume: desired_volume.to_string(),
         })
     }
 }
@@ -237,12 +245,16 @@ impl Action for SetVolume {
         map.insert("DesiredVolume", &self.desired_volume);
         map
     }
+
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok(format!("Set volume to {}", self.desired_volume))
+    }
 }
 
 pub struct GetVolume;
 
 #[async_trait]
-impl Action for GetVolume {
+impl Action<u8> for GetVolume {
     fn get_service(&self) -> Box<dyn Service> {
         Box::new(RenderingControl)
     }
@@ -258,19 +270,19 @@ impl Action for GetVolume {
         map
     }
 
-    async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
+    async fn handle_successful_response(&self, res: reqwest::Response) -> Result<u8, String> {
         let xml = get_res_text(res).await?;
 
         let volume = parse_getvolume(xml, self)?;
 
-        Ok(format!("Current volume: {volume}"))
+        Ok(volume)
     }
 }
 
 pub struct GetStatus;
 
 #[async_trait]
-impl Action for GetStatus {
+impl Action<PlaybackStatus> for GetStatus {
     fn get_service(&self) -> Box<dyn Service> {
         Box::new(AVTransport)
     }
@@ -279,12 +291,13 @@ impl Action for GetStatus {
         "GetTransportInfo"
     }
 
-    async fn handle_successful_response(&self, res: reqwest::Response) -> Result<String, String> {
+    async fn handle_successful_response(
+        &self,
+        res: reqwest::Response,
+    ) -> Result<PlaybackStatus, String> {
         let xml = get_res_text(res).await?;
 
-        let data = parse_status(xml, self)?;
-
-        Ok(format!("Current status:\n{data}"))
+        Ok(parse_status(xml, self)?)
     }
 }
 
@@ -318,6 +331,10 @@ impl Action for Seek {
         map.insert("Target", &self.target);
         map
     }
+
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok(format!("Playing from {}", self.target))
+    }
 }
 
 pub struct Next;
@@ -337,6 +354,10 @@ impl Action for Next {
             "711" => Some("Could not find next track. Ensure that you are in the queue and that there are tracks after the current one.".to_owned()),
             _ => None,
         }
+    }
+
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok("Moved to next track".to_owned())
     }
 }
 
@@ -358,6 +379,10 @@ impl Action for Previous {
             _ => None,
         }
     }
+
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok("Moved to previous track".to_owned())
+    }
 }
 
 pub struct EndDirectControlSession;
@@ -370,6 +395,10 @@ impl Action for EndDirectControlSession {
 
     fn get_action_name(&self) -> &'static str {
         "EndDirectControlSession"
+    }
+
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok("Ended third-party control of speaker".to_owned())
     }
 }
 
@@ -402,6 +431,10 @@ impl Action for AddURIToQueue {
         map.insert("EnqueueAsNext", "0");
         map
     }
+
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok(format!("Added {} to queue", self.uri))
+    }
 }
 
 pub struct ClearQueue;
@@ -414,5 +447,9 @@ impl Action for ClearQueue {
 
     fn get_action_name(&self) -> &'static str {
         "RemoveAllTracksFromQueue"
+    }
+
+    async fn handle_successful_response(&self, _res: reqwest::Response) -> Result<String, String> {
+        Ok("Removed all tracks from queue".to_owned())
     }
 }

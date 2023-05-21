@@ -1,4 +1,7 @@
-use crate::actions::{self, Action};
+use crate::{
+    actions::{self, Action},
+    parse_utils::CurrentTrackData,
+};
 use reqwest;
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
@@ -17,13 +20,12 @@ pub async fn enter_queue(s: &Speaker) -> Result<String, String> {
     s.cmd(actions::SetURI::new(uri)).await
 }
 
-pub async fn action_then_current(
+pub async fn action_then_current<T: std::fmt::Display>(
     s: &Speaker,
-    action: impl Action + std::marker::Sync,
-) -> Result<String, String> {
+    action: impl Action<T> + std::marker::Sync,
+) -> Result<CurrentTrackData, String> {
     let _action_res = s.cmd(action).await?;
-    let current_track_info = s.cmd(actions::GetCurrentTrackInfo).await?;
-    Ok(current_track_info)
+    Ok(s.cmd(actions::GetCurrentTrackInfo).await?)
 }
 
 pub struct Speaker {
@@ -72,10 +74,10 @@ impl Speaker {
     }
 
     // sync bound is required for default trait implementation
-    pub async fn cmd(
+    pub async fn cmd<T: std::fmt::Display>(
         &self,
-        action: impl actions::Action + std::marker::Sync,
-    ) -> Result<String, String> {
+        action: impl actions::Action<T> + std::marker::Sync,
+    ) -> Result<T, String> {
         let action_name = action.get_action_name();
         let arguments = action.get_args_map();
 

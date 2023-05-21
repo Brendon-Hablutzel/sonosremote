@@ -3,9 +3,9 @@ use std::fmt;
 
 use crate::actions::{Action, GetCurrentTrackInfo, GetQueue, GetStatus, GetVolume};
 
-fn general_clean<T>(xml: String, action: &T) -> String
+fn general_clean<T, U: std::fmt::Display>(xml: String, action: &T) -> String
 where
-    T: Action + ?Sized,
+    T: Action<U> + ?Sized,
 {
     let action_name = action.get_action_name();
     let service_name = action.get_service().get_name();
@@ -68,7 +68,7 @@ fn clean_meta_data(xml: String) -> String {
 }
 
 #[derive(Debug)]
-pub struct CurrentData {
+pub struct CurrentTrackData {
     position: String,
     duration: String,
     uri: String,
@@ -76,7 +76,7 @@ pub struct CurrentData {
     artist: Option<String>,
 }
 
-impl fmt::Display for CurrentData {
+impl fmt::Display for CurrentTrackData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let title = self.title.as_ref().map_or("None", |n| n);
         let artist = self.artist.as_ref().map_or("None", |n| n);
@@ -103,7 +103,10 @@ fn get_text<'a>(tag: roxmltree::Node, err: &'a str) -> Result<String, &'a str> {
     Ok(tag.text().ok_or(err)?.to_owned())
 }
 
-pub fn parse_current(xml: String, action: &GetCurrentTrackInfo) -> Result<CurrentData, String> {
+pub fn parse_current(
+    xml: String,
+    action: &GetCurrentTrackInfo,
+) -> Result<CurrentTrackData, String> {
     let xml = clean_meta_data(general_clean(xml, action));
     let parsed_xml =
         roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
@@ -135,7 +138,7 @@ pub fn parse_current(xml: String, action: &GetCurrentTrackInfo) -> Result<Curren
         "No position found",
     )?;
 
-    Ok(CurrentData {
+    Ok(CurrentTrackData {
         position,
         duration,
         uri,
@@ -144,7 +147,7 @@ pub fn parse_current(xml: String, action: &GetCurrentTrackInfo) -> Result<Curren
     })
 }
 
-pub fn parse_getvolume(xml: String, action: &GetVolume) -> Result<String, String> {
+pub fn parse_getvolume(xml: String, action: &GetVolume) -> Result<u8, String> {
     let xml = general_clean(xml, action);
     let parsed_xml =
         roxmltree::Document::parse(&xml).map_err(|err| format!("Error parsing xml: {err}"))?;
@@ -152,14 +155,48 @@ pub fn parse_getvolume(xml: String, action: &GetVolume) -> Result<String, String
     let volume = get_text(
         get_tag_by_name(&parsed_xml, "CurrentVolume")?,
         "No volume found",
-    )?;
+    )?
+    .parse::<u8>()
+    .map_err(|_| "Unable to parse volume into number".to_owned())?;
 
     Ok(volume)
 }
 
 #[derive(Debug)]
+pub enum State {
+    Stopped,
+    Playing,
+    Paused,
+    Transitioning,
+}
+
+impl State {
+    fn new(state_str: &str) -> Result<Self, String> {
+        match state_str {
+            "STOPPED" => Ok(Self::Stopped),
+            "PLAYING" => Ok(Self::Playing),
+            "PAUSED_PLAYBACK" => Ok(Self::Paused),
+            "TRANSITIONING" => Ok(Self::Transitioning),
+            _ => Err("Invalid state".to_owned()),
+        }
+    }
+}
+
+impl fmt::Display for State {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let output = match self {
+            State::Stopped => "Stopped",
+            State::Playing => "Playing",
+            State::Paused => "Paused",
+            State::Transitioning => "Transitioning",
+        };
+        write!(f, "{output}")
+    }
+}
+
+#[derive(Debug)]
 pub struct PlaybackStatus {
-    state: String,
+    state: State,
     status: String,
 }
 
@@ -178,6 +215,7 @@ pub fn parse_status(xml: String, action: &GetStatus) -> Result<PlaybackStatus, S
         get_tag_by_name(&parsed_xml, "CurrentTransportState")?,
         "No state found",
     )?;
+    let state = State::new(&state)?;
 
     let status = get_text(
         get_tag_by_name(&parsed_xml, "CurrentTransportStatus")?,
@@ -254,9 +292,9 @@ pub fn parse_queue(xml: String, action: &GetQueue) -> Result<Vec<QueueItem>, Str
 }
 
 // ?Sized is required because size of 'action' is not known at compile time
-pub fn get_error_code<T>(xml: String, action: &T) -> Result<String, String>
+pub fn get_error_code<T, U: std::fmt::Display>(xml: String, action: &T) -> Result<String, String>
 where
-    T: Action + ?Sized,
+    T: Action<U> + ?Sized,
 {
     let xml = general_clean(xml, action);
     let parsed =
