@@ -41,13 +41,15 @@ MAN: ssdp:discover
 MX: 1
 ST: urn:schemas-upnp-org:device:ZonePlayer:1";
 
+    socket.set_broadcast(true).expect("Should be able to enable broadcast");
+
     socket
         .send_to(body.as_bytes(), "239.255.255.250:1900")
         .map_err(|err| err.to_string())?;
 
-    // socket
-    //  .send_to(body.as_bytes(), "255.255.255.255:1900")
-    //  .unwrap();
+    socket
+        .send_to(body.as_bytes(), "255.255.255.255:1900")
+        .map_err(|err| err.to_string())?;
 
     let mut buf = [0; 1024];
     while let Ok((_, addr)) = socket.recv_from(&mut buf) {
