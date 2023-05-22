@@ -161,24 +161,29 @@ pub async fn gradually_change_volume(
         .map_err(|err| format!("Error initializing speaker: {err}"))?;
 
     println!(
-        "Starting loop to change volume by {volume_change} every {s} seconds\nSleeping for {s} seconds before beginning...",
-        s=volume_change_interval.as_secs_f32()
+        "Starting loop to change volume by {volume_change} every {s} seconds",
+        s = volume_change_interval.as_secs_f32()
     );
 
     let initial_time = SystemTime::now();
 
     loop {
-        println!("-----");
-
-        sleep(volume_change_interval);
-
-        let volume = speaker.cmd(actions::GetVolume).await?;
-        if volume == 0 {
-            println!("Volume has reached 0, exiting...");
+        let volume: i32 = speaker.cmd(actions::GetVolume).await?.into();
+        if volume + volume_change < 0 || volume + volume_change > 100 {
+            println!("Volume has reached {volume}, exiting...");
             break;
         }
 
-        let new_volume = (volume as i32 + volume_change) as u8;
+        println!(
+            "Waiting for {} second(s)",
+            volume_change_interval.as_secs_f32()
+        );
+
+        sleep(volume_change_interval);
+
+        println!("-----");
+
+        let new_volume = (volume + volume_change) as u8;
 
         let now = SystemTime::now();
         let time_elapsed = now
@@ -193,11 +198,6 @@ pub async fn gradually_change_volume(
         speaker.cmd(actions::SetVolume::new(new_volume)?).await?;
 
         println!("Changed volume from {volume} to {new_volume}");
-
-        println!(
-            "Waiting for {} second(s)",
-            volume_change_interval.as_secs_f32()
-        );
     }
 
     Ok(())

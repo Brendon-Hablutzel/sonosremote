@@ -5,7 +5,7 @@ use sonosremote::{connect, discover_devices, get_info, gradually_change_volume};
 #[command()]
 struct Cli {
     #[command(subcommand)]
-    command: Option<Commands>,
+    command: Commands,
 }
 
 #[derive(Subcommand)]
@@ -29,20 +29,15 @@ async fn main() -> Result<(), String> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Commands::Connect { ip_addr }) => {
-            connect(&ip_addr).await?;
-        }
-        Some(Commands::ChangeVolume {
+        Commands::Connect { ip_addr } => connect(&ip_addr).await?,
+        Commands::ChangeVolume {
             ip_addr,
             interval_seconds,
             volume_change,
-        }) => gradually_change_volume(ip_addr, *interval_seconds, *volume_change).await?,
-        Some(Commands::Discover) => discover_devices().await?,
-        Some(Commands::GetInfo { ip_addr }) => {
+        } => gradually_change_volume(ip_addr, *interval_seconds, *volume_change).await?,
+        Commands::Discover => discover_devices().await?,
+        Commands::GetInfo { ip_addr } => {
             println!("{}", get_info(&ip_addr).await?);
-        }
-        None => {
-            println!("No command selected");
         }
     }
 
