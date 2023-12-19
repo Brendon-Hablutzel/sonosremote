@@ -41,7 +41,9 @@ MAN: ssdp:discover
 MX: 1
 ST: urn:schemas-upnp-org:device:ZonePlayer:1";
 
-    socket.set_broadcast(true).expect("Should be able to enable broadcast");
+    socket
+        .set_broadcast(true)
+        .expect("Should be able to enable broadcast");
 
     socket
         .send_to(body.as_bytes(), "239.255.255.250:1900")
@@ -67,6 +69,23 @@ pub async fn connect(ip_addr: &str) -> Result<(), String> {
     let speaker = speaker::Speaker::new(&ip_addr)
         .await
         .map_err(|err| format!("Error initializing speaker: {err}"))?;
+
+    let help_menu = "COMMANDS:
+play
+pause
+seek <hours:minutes:seconds>
+current (prints information about current track)
+seturi <URI> (plays audio from the specified URI)
+setvolume <newvolume>
+getvolume
+status (whether the playback is stopped)
+next
+previous
+endcontrol (ends the control of any other services communicating with the speaker)
+info (prints info about the speaker)
+addtoqueue <URI> (adds audio from specified URI to queue)
+clearqueue (clears the queue)
+help (displays this menu)";
 
     loop {
         println!(">");
@@ -137,6 +156,7 @@ pub async fn connect(ip_addr: &str) -> Result<(), String> {
                 }
             },
             "clearqueue" => speaker.cmd(actions::ClearQueue).await,
+            "help" => Ok(String::from(help_menu)),
             _ => Err("Invalid option".to_owned()),
         };
 
