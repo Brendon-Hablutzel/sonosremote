@@ -1,72 +1,59 @@
-use crate::speaker::action_then_current;
-use parse_utils::{get_tag_by_name, get_text};
-use std::net::UdpSocket;
-use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::{
+    thread::sleep,
+    time::{Duration, SystemTime},
+};
 
-pub mod actions;
-pub mod parse_utils;
-pub mod services;
-pub mod speaker;
+use rusty_sonos::{
+    discovery::{discover_devices, get_speaker_info},
+    speaker::Speaker,
+};
 
-pub async fn get_info(ip_addr: &str) -> Result<String, String> {
-    let url = format!("http://{ip_addr}:1400/xml/device_description.xml");
-    let res = reqwest::get(&url)
-        .await
-        .map_err(|err| err.to_string())?
-        .text()
-        .await
-        .map_err(|err| err.to_string())?;
+async fn show_queue(speaker: &Speaker) -> Result<String, String> {
+    let queue = speaker.get_queue().await?;
 
-    let parsed_xml = roxmltree::Document::parse(&res).map_err(|err| err.to_string())?;
+    let mut queue_string = String::from("Queue:\n");
 
-    let friendly_name =
-        get_tag_by_name(&parsed_xml, "friendlyName").map_err(|err| err.to_string())?;
-    let room_name = get_tag_by_name(&parsed_xml, "roomName").map_err(|err| err.to_string())?;
+    for track in queue {
+        let track_string = format!(
+            "{} by {}\nURI: {}\nDuration: {}",
+            track.title.unwrap_or("None".to_owned()),
+            track.artist.unwrap_or("None".to_owned()),
+            track.uri,
+            track.duration.unwrap_or("N/A".to_owned())
+        );
+        queue_string.push_str(&track_string);
+    }
+
+    Ok(queue_string)
+}
+
+async fn show_current_track(speaker: &Speaker) -> Result<String, String> {
+    let current_track = speaker.get_current_track().await?;
 
     Ok(format!(
-        "{} in {}",
-        get_text(friendly_name, "No friendly name found")?,
-        get_text(room_name, "No room name found")?
+        "{} by {}\nURI: {}\nPosition: {} / {}",
+        current_track.title.unwrap_or("None".to_owned()),
+        current_track.artist.unwrap_or("None".to_owned()),
+        current_track.uri,
+        current_track.position,
+        current_track.duration
     ))
 }
 
-pub async fn discover_devices() -> Result<(), String> {
-    let socket: UdpSocket =
-        UdpSocket::bind("0.0.0.0:0").expect("Should be able to create a UDP socket");
+async fn show_current_volume(speaker: &Speaker) -> Result<String, String> {
+    let current_volume = speaker.get_volume().await?;
 
-    let body = "M-SEARCH * HTTP/1.1
-HOST: 239.255.255.250:1900
-MAN: ssdp:discover
-MX: 1
-ST: urn:schemas-upnp-org:device:ZonePlayer:1";
+    Ok(current_volume.to_string())
+}
 
-    socket
-        .set_broadcast(true)
-        .expect("Should be able to enable broadcast");
+async fn show_current_status(speaker: &Speaker) -> Result<String, String> {
+    let current_status = speaker.get_playback_status().await?;
 
-    socket
-        .send_to(body.as_bytes(), "239.255.255.250:1900")
-        .map_err(|err| err.to_string())?;
-
-    socket
-        .send_to(body.as_bytes(), "255.255.255.255:1900")
-        .map_err(|err| err.to_string())?;
-
-    let mut buf = [0; 1024];
-    while let Ok((_, addr)) = socket.recv_from(&mut buf) {
-        let addr = addr.to_string().replace(&format!(":{}", addr.port()), "");
-        if let Ok(info) = get_info(&addr).await {
-            println!("{info}");
-        } else {
-            eprintln!("Error fetching data for device at address {addr}");
-        }
-    }
-    Ok(())
+    Ok(current_status.playback_state.to_string())
 }
 
 pub async fn connect(ip_addr: &str) -> Result<(), String> {
-    let speaker = speaker::Speaker::new(&ip_addr)
+    let speaker = Speaker::new(&ip_addr)
         .await
         .map_err(|err| format!("Error initializing speaker: {err}"))?;
 
@@ -101,61 +88,74 @@ help (displays this menu)";
 
         // indexing is ok because .split() always returns at least one element
         let output = match input[0] {
-            "play" => speaker.cmd(actions::Play).await,
-            "pause" => speaker.cmd(actions::Pause).await,
-            "queue" => speaker.cmd(actions::GetQueue).await,
-            "current" => speaker
-                .cmd(actions::GetCurrentTrackInfo)
+            "play" => (&speaker)
+                .play()
                 .await
-                .map(|track_data| format!("{track_data}")),
+                .map(|_| "Playing current track".to_owned()),
+            "pause" => (&speaker)
+                .play()
+                .await
+                .map(|_| "Pausing current track".to_owned()),
+            "queue" => show_queue(&speaker).await,
+            "current" => show_current_track(&speaker).await,
             "seturi" => match input.get(1) {
                 None => Err("Must enter a URI".to_owned()),
-                Some(uri) => speaker.cmd(actions::SetURI::new(uri.to_string())).await,
+                Some(uri) => (&speaker)
+                    .set_current_uri(uri)
+                    .await
+                    .map(|_| format!("Playing from URI: {}", uri)),
             },
             "setvolume" => match input.get(1) {
                 None => Err("Must provide volume".to_owned()),
                 Some(str_volume) => match str_volume.parse::<u8>() {
-                    Ok(volume) => match actions::SetVolume::new(volume) {
-                        Ok(action) => speaker.cmd(action).await,
-                        Err(_) => Err("Invalid volume".to_owned()),
-                    },
+                    Ok(volume) => (&speaker)
+                        .set_volume(volume)
+                        .await
+                        .map(|_| "Setting volume to {volume}".to_owned()),
                     Err(_) => Err("Invalid volume".to_owned()),
                 },
             },
-            "getvolume" => speaker
-                .cmd(actions::GetVolume)
-                .await
-                .map(|vol| format!("Current volume: {vol}")),
-            "status" => speaker
-                .cmd(actions::GetStatus)
-                .await
-                .map(|status| format!("{status}")),
+            "getvolume" => show_current_volume(&speaker).await,
+            "status" => show_current_status(&speaker).await,
             "seek" => match input.get(1) {
                 None => Err("Must enter a target time".to_owned()),
-                Some(target_time) => {
-                    speaker
-                        .cmd(actions::Seek::new(target_time.to_string()))
-                        .await
-                }
+                Some(target_time) => (&speaker)
+                    .seek(target_time)
+                    .await
+                    .map(|_| format!("Moving to position {}", target_time)),
             },
-            "next" => action_then_current(&speaker, actions::Next)
+            "next" => (&speaker)
+                .move_to_next_track()
                 .await
-                .map(|track_data| format!("{track_data}")),
-            "previous" => action_then_current(&speaker, actions::Previous)
+                .map(|_| "Moving to next track".to_owned()),
+            "previous" => (&speaker)
+                .move_to_previous_track()
                 .await
-                .map(|track_data| format!("{track_data}")),
-            "endcontrol" => speaker.cmd(actions::EndDirectControlSession).await,
-            "enterqueue" => speaker::enter_queue(&speaker).await,
-            "info" => Ok(speaker.get_info()),
+                .map(|_| "Moving to next track".to_owned()),
+            "endcontrol" => (&speaker)
+                .end_external_control()
+                .await
+                .map(|_| "End external control of speaker".to_owned()),
+            "enterqueue" => (&speaker)
+                .enter_queue()
+                .await
+                .map(|_| "Entering the queue".to_owned()),
+            "info" => Ok(format!(
+                "{}, {}",
+                &speaker.get_friendly_name(),
+                &speaker.get_uid()
+            )),
             "addtoqueue" => match input.get(1) {
                 None => Err("Must enter a URI".to_owned()),
-                Some(uri) => {
-                    speaker
-                        .cmd(actions::AddURIToQueue::new(uri.to_string()))
-                        .await
-                }
+                Some(uri) => (&speaker)
+                    .add_track_to_queue(uri)
+                    .await
+                    .map(|_| format!("Adding track from {} to queue", uri)),
             },
-            "clearqueue" => speaker.cmd(actions::ClearQueue).await,
+            "clearqueue" => (&speaker)
+                .clear_queue()
+                .await
+                .map(|_| "Clearing queue".to_owned()),
             "help" => Ok(String::from(help_menu)),
             _ => Err("Invalid option".to_owned()),
         };
@@ -178,7 +178,7 @@ pub async fn gradually_change_volume(
         return Err("Volume change magnitude must be less than or equal to 100".to_owned());
     }
 
-    let speaker = speaker::Speaker::new(&ip_addr)
+    let speaker = Speaker::new(&ip_addr)
         .await
         .map_err(|err| format!("Error initializing speaker: {err}"))?;
 
@@ -190,7 +190,7 @@ pub async fn gradually_change_volume(
     let initial_time = SystemTime::now();
 
     loop {
-        let volume: i32 = speaker.cmd(actions::GetVolume).await?.into();
+        let volume: i32 = speaker.get_volume().await?.into();
         if volume + volume_change < 0 || volume + volume_change > 100 {
             println!("Volume has reached {volume}, exiting...");
             break;
@@ -217,10 +217,35 @@ pub async fn gradually_change_volume(
             time_elapsed.as_secs_f32()
         );
 
-        speaker.cmd(actions::SetVolume::new(new_volume)?).await?;
+        speaker.set_volume(new_volume).await?;
 
         println!("Changed volume from {volume} to {new_volume}");
     }
+
+    Ok(())
+}
+
+pub async fn discover(search_secs: u64) -> Result<(), String> {
+    let devices = discover_devices(search_secs, 5).await?;
+    let num_devices = devices.len();
+
+    if num_devices == 0 {
+        println!("No devices found");
+    } else {
+        println!("{num_devices} devices found in {search_secs} seconds:");
+        for device in devices {
+            println!("{}, {}", device.friendly_name, device.room_name);
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn show_speaker_info(ip_addr: &str) -> Result<(), String> {
+    let info = get_speaker_info(ip_addr).await?;
+
+    println!("Speaker found:");
+    println!("{}, {}", info.friendly_name, info.room_name);
 
     Ok(())
 }
