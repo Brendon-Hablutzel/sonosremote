@@ -10,16 +10,22 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// connect to a speaker, given an IP address
+    /// connect to a speaker, given an IP address, and enter into an interactive terminal to control it
     Interactive { ip_addr: String },
-    /// change the volume in intervals of a given number of seconds
+    /// incrementally change the volume of the given speaker
     ChangeVolume {
+        /// the IP address of the speaker
         ip_addr: String,
+        /// the number of seconds to wait between changing the volume
         interval_seconds: u64,
+        /// how much to change the volume by
         volume_change: i32,
     },
-    /// discover sonos devices on the current network
-    Discover { search_secs: u64 },
+    /// discover Sonos devices on the current network
+    Discover {
+        /// the number of seconds to search for devices before returning results
+        search_secs: u64,
+    },
     /// get info about a specific speaker, given its IP address
     GetInfo { ip_addr: String },
 }

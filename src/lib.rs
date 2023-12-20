@@ -8,6 +8,23 @@ use rusty_sonos::{
     speaker::Speaker,
 };
 
+const INTERACTIVE_HELP_MESSAGE: &str = "COMMANDS:
+play
+pause
+seek <hours:minutes:seconds>
+current (prints information about current track)
+seturi <URI> (plays audio from the specified URI)
+setvolume <newvolume>
+getvolume
+status (whether the playback is stopped)
+next
+previous
+endcontrol (ends the control of any other services communicating with the speaker)
+info (prints info about the speaker)
+addtoqueue <URI> (adds audio from specified URI to queue)
+clearqueue (clears the queue)
+help (displays this menu)";
+
 async fn show_queue(speaker: &Speaker) -> Result<String, String> {
     let queue = speaker.get_queue().await?;
 
@@ -56,23 +73,6 @@ pub async fn connect(ip_addr: &str) -> Result<(), String> {
     let speaker = Speaker::new(&ip_addr)
         .await
         .map_err(|err| format!("Error initializing speaker: {err}"))?;
-
-    let help_menu = "COMMANDS:
-play
-pause
-seek <hours:minutes:seconds>
-current (prints information about current track)
-seturi <URI> (plays audio from the specified URI)
-setvolume <newvolume>
-getvolume
-status (whether the playback is stopped)
-next
-previous
-endcontrol (ends the control of any other services communicating with the speaker)
-info (prints info about the speaker)
-addtoqueue <URI> (adds audio from specified URI to queue)
-clearqueue (clears the queue)
-help (displays this menu)";
 
     loop {
         println!(">");
@@ -156,7 +156,7 @@ help (displays this menu)";
                 .clear_queue()
                 .await
                 .map(|_| "Clearing queue".to_owned()),
-            "help" => Ok(String::from(help_menu)),
+            "help" => Ok(String::from(INTERACTIVE_HELP_MESSAGE)),
             _ => Err("Invalid option".to_owned()),
         };
 
