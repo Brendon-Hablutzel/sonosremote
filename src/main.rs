@@ -1,5 +1,4 @@
 use clap::{Parser, Subcommand};
-use rusty_sonos::discovery::{discover_devices, get_speaker_info};
 use sonosremote::{connect, discover, gradually_change_volume, show_speaker_info};
 
 #[derive(Parser)]
