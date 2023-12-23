@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use sonosremote::{connect, discover, gradually_change_volume, show_speaker_info};
+use sonosremote::{discover, gradually_change_volume, interactive, show_speaker_info};
 
 #[derive(Parser)]
 #[command()]
@@ -31,11 +31,11 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), String> {
+async fn main() -> Result<(), anyhow::Error> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Interactive { ip_addr } => connect(&ip_addr).await?,
+        Commands::Interactive { ip_addr } => interactive(&ip_addr).await?,
         Commands::ChangeVolume {
             ip_addr,
             interval_seconds,

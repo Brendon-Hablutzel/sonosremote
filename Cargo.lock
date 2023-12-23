@@ -66,6 +66,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.76"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59d2a3357dde987206219e78ecfbbb6e8dad06cbb65292758d3270e6254f7355"
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -740,9 +746,9 @@ dependencies = [
 
 [[package]]
 name = "rusty-sonos"
-version = "0.1.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0c6c60e1f8f7435e94420ccb93eb78801ee45521b9f46d5d011d0bba070a081"
+checksum = "68ece68d5d5401e87c473a98f8ec9bcda1f710c19435babbfa7ab6e734a433b4"
 dependencies = [
  "reqwest",
  "roxmltree",
@@ -874,6 +880,7 @@ dependencies = [
 name = "sonosremote"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "rusty-sonos",
  "tokio",
