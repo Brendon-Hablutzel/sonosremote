@@ -746,9 +746,9 @@ dependencies = [
 
 [[package]]
 name = "rusty-sonos"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68ece68d5d5401e87c473a98f8ec9bcda1f710c19435babbfa7ab6e734a433b4"
+checksum = "edc76325ceeeb7c22a782b225af3be530d709ad840e2736e7520cc2a29e8ae67"
 dependencies = [
  "reqwest",
  "roxmltree",

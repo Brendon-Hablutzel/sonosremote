@@ -10,9 +10,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// connect to a speaker, given an IP address, and enter into an interactive terminal to control it
+    /// connect to a speaker, given an IP address, and enter an interactive terminal for controlling it
     Interactive { ip_addr: String },
-    /// incrementally change the volume of the given speaker
+    /// incrementally change the volume of the given speaker over time
     ChangeVolume {
         /// the IP address of the speaker
         ip_addr: String,
