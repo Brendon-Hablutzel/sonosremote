@@ -4,6 +4,7 @@ use rusty_sonos::{
     speaker::Speaker,
 };
 use std::{
+    io::{stdout, Write},
     net::Ipv4Addr,
     str::FromStr,
     thread::sleep,
@@ -30,18 +31,20 @@ help (displays this menu)";
 async fn show_queue(speaker: &Speaker) -> Result<String, anyhow::Error> {
     let queue = speaker.get_queue().await?;
 
-    let mut queue_string = String::from("Queue:\n");
-
-    for track in queue {
-        let track_string = format!(
-            "{} by {}\nURI: {}\nDuration: {}",
-            track.title.unwrap_or(String::from("None")),
-            track.artist.unwrap_or(String::from("None")),
-            track.uri,
-            track.duration.unwrap_or(String::from("N/A"))
-        );
-        queue_string.push_str(&track_string);
-    }
+    // join the queue into a single string, with each track separated by a newline
+    let queue_string = queue
+        .into_iter()
+        .map(|track| {
+            format!(
+                "{} by {}\nURI: {}\nDuration: {}",
+                track.title.unwrap_or(String::from("None")),
+                track.artist.unwrap_or(String::from("None")),
+                track.uri,
+                track.duration.unwrap_or(String::from("N/A"))
+            )
+        })
+        .collect::<Vec<String>>()
+        .join("\n");
 
     Ok(queue_string)
 }
@@ -220,6 +223,10 @@ pub async fn interactive(ip_addr: &str) -> Result<(), anyhow::Error> {
 
     loop {
         print!("> ");
+        if let Err(err) = stdout().flush() {
+            eprintln!("Error flushing stdout: {}", err);
+            continue;
+        }
 
         let mut input = String::new();
 
@@ -230,7 +237,6 @@ pub async fn interactive(ip_addr: &str) -> Result<(), anyhow::Error> {
 
         let input: Vec<&str> = input.trim().split(" ").collect();
 
-        // indexing is ok because .split() always returns at least one element
         let output = process_command(&speaker, input).await;
 
         match output {
